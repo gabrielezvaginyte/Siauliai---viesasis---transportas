@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kaip nuvažiuoti – Šiaulių autobusai</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{--bg:#0F1318;--panel:#161B22;--card:#1C222B;--line:#2E3640;--fg:#EEF1F4;--muted:#9BA6B2;--accent:#2BA88F;--c21:#D8CF5E;--c24:#E2765A;--c6:#2BA88F;--b:#F2B33D}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:"Avenir Next",Avenir,"Segoe UI",system-ui,sans-serif}
+.app{display:flex;flex-wrap:wrap;min-height:100%}
+.side{flex:1 1 320px;max-width:440px;padding:16px;display:flex;flex-direction:column;gap:14px;background:var(--panel)}
+#map{flex:999 1 400px;min-height:320px;background:#12171D}
+@media (max-width:760px){.side{max-width:none}#map{min-height:300px;height:300px}}
+.field{display:flex;align-items:center;gap:10px}
+.pin{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#0F1318;flex-shrink:0}
+.inp{flex:1;min-width:0;position:relative}
+input[type=text]{width:100%;min-height:44px;padding:0 40px 0 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit;font-size:15px}
+input[type=text]:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+.mini{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:0;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.mini:hover{color:var(--fg);background:var(--card)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.go{min-height:44px;border:0;border-radius:10px;background:var(--accent);color:#0F1318;font:inherit;font-size:15px;font-weight:800;cursor:pointer}
+.go:disabled{opacity:.5;cursor:default}
+.hint{font-size:13px;color:var(--muted);line-height:1.45;margin:0}
+.msg{font-size:14px;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+.opt{width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;background:transparent;border:1px solid transparent;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.opt.sel{background:var(--card);border-color:var(--line)}
+.opt:not(.sel):hover{background:#1a2028}
+.top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.badge{min-width:30px;height:28px;padding:0 6px;border-radius:8px;font-size:14px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;color:#0F1318}
+.time{margin-left:auto;font-size:18px;font-weight:800}
+.time small{font-size:12px;font-weight:600;color:var(--muted)}
+.arrow{color:var(--muted);font-size:14px}
+.walkic{color:var(--muted);display:inline-flex}
+ol.steps{list-style:none;margin:0;padding:0;display:none}
+.opt.sel ol.steps{display:block}
+ol.steps li{display:flex;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.bar{width:4px;border-radius:2px;flex-shrink:0}
+.bar.walk{background:repeating-linear-gradient(var(--muted) 0 4px,transparent 4px 8px)}
+.st{display:flex;flex-direction:column;gap:2px;font-size:14px}
+.st b{font-weight:700}
+.st span{font-size:13px;color:var(--muted)}
+.foot{margin-top:auto;font-size:12px;color:var(--muted)}
+.leaflet-container{background:#12171D;font:inherit}
+.leaflet-control-attribution{background:rgba(15,19,24,.8)!important;color:var(--muted)!important}
+.leaflet-control-attribution a{color:var(--muted)!important}
+.lbl{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;font-weight:700;font-size:12px;padding:2px 6px;box-shadow:none}
+.lbl:before{display:none}
+</style>
+</head>
+<body>
+<div class="app">
+<section class="side" aria-label="Kelionės paieška">
+<div class="field">
+<span class="pin" style="background:#EEF1F4" aria-hidden="true">A</span>
+<div class="inp"><label class="sr" for="from">Iš kur</label><input id="from" type="text" list="stoplist" placeholder="Iš kur: adresas ar stotelė" autocomplete="off">
+<button class="mini" id="loc" type="button" aria-label="Mano vieta" title="Mano vieta"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button></div>
+</div>
+<div class="field">
+<span class="pin" style="background:var(--b)" aria-hidden="true">B</span>
+<div class="inp"><label class="sr" for="to">Į kur</label><input id="to" type="text" list="stoplist" placeholder="Į kur: adresas ar stotelė" autocomplete="off">
+<button class="mini" id="swap" type="button" aria-label="Sukeisti vietomis" title="Sukeisti"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/></svg></button></div>
+</div>
+<datalist id="stoplist"></datalist>
+<button class="go" id="go" type="button">Rasti maršrutą</button>
+<p class="hint" id="hint">Įvesk adresą arba stotelę. Taškus A ir B gali pažymėti ir paspaudęs žemėlapyje.</p>
+<div id="out" aria-live="polite"></div>
+<p class="foot">Laikas apytikslis: skaičiuojama pagal atstumą, ne pagal tvarkaraštį.</p>
+</section>
+<div id="map" role="region" aria-label="Žemėlapis"></div>
+</div>
+<script>
+const DATA = {"stops":[{"id":1,"n":"Turgaus","lat":55.936679,"lon":23.307408},{"id":2,"n":"Parko","lat":55.935685,"lon":23.312688},{"id":3,"n":"Prisikėlimo aikštės","lat":55.931787,"lon":23.315778},{"id":4,"n":"Autobusų stoties","lat":55.928032,"lon":23.30851},{"id":5,"n":"Dubijos","lat":55.929092,"lon":23.294342},{"id":6,"n":"Žaliūkių malūno","lat":55.923969,"lon":23.274451},{"id":7,"n":"Lauko","lat":55.921031,"lon":23.264475},{"id":8,"n":"Teniso kortų","lat":55.919619,"lon":23.26271},{"id":9,"n":"Lyros","lat":55.915441,"lon":23.264912},{"id":10,"n":"Dainų","lat":55.913816,"lon":23.259257},{"id":11,"n":"Bažnyčios","lat":55.912003,"lon":23.251997},{"id":12,"n":"Beržynėlio","lat":55.908428,"lon":23.257117},{"id":13,"n":"Degalinės","lat":55.905054,"lon":23.261906},{"id":14,"n":"Lieporių","lat":55.901639,"lon":23.266816},{"id":15,"n":"Gegužių žiedo","lat":55.89975,"lon":23.270895},{"id":16,"n":"Ginkūnų žiedo","lat":55.953654,"lon":23.35734},{"id":17,"n":"Mokyklos","lat":55.955243,"lon":23.347432},{"id":18,"n":"Pakruojo","lat":55.95501,"lon":23.340469},{"id":19,"n":"Vaidoto","lat":55.952057,"lon":23.337674},{"id":20,"n":"Smėlio","lat":55.941511,"lon":23.327575},{"id":21,"n":"Aukštosios","lat":55.937923,"lon":23.324223},{"id":24,"n":"Žaliūkių","lat":55.9237,"lon":23.299276},{"id":25,"n":"Vairo","lat":55.921912,"lon":23.295248},{"id":26,"n":"Elektros tinklų","lat":55.919503,"lon":23.289874},{"id":27,"n":"Aukštabalio","lat":55.916422,"lon":23.283117},{"id":28,"n":"J. Sondeckio","lat":55.913531,"lon":23.276753},{"id":29,"n":"Dainų poliklinikos","lat":55.911206,"lon":23.271499},{"id":30,"n":"Lieporių","lat":55.908716,"lon":23.266104},{"id":31,"n":"Tilžės","lat":55.907117,"lon":23.262377},{"id":32,"n":"Beržynėlio","lat":55.909272,"lon":23.25649},{"id":33,"n":"Gytarių","lat":55.912405,"lon":23.250303},{"id":34,"n":"Pailių","lat":55.909869,"lon":23.243465},{"id":35,"n":"Kviečių","lat":55.907676,"lon":23.239419},{"id":36,"n":"Gytarių žiedo","lat":55.904474,"lon":23.240668},{"id":37,"n":"Autobusų stoties","lat":55.92784,"lon":23.308782},{"id":38,"n":"Geležinkelio stoties","lat":55.924193,"lon":23.314042},{"id":39,"n":"Draugystės","lat":55.927376,"lon":23.319637},{"id":40,"n":"Geriatrijos centro","lat":55.927205,"lon":23.322346},{"id":41,"n":"Prūdelio","lat":55.924983,"lon":23.330911},{"id":42,"n":"Šimšės","lat":55.923994,"lon":23.342007},{"id":43,"n":"Vilkaviškio","lat":55.923539,"lon":23.347621},{"id":44,"n":"Veiverių","lat":55.920801,"lon":23.348057},{"id":45,"n":"Agrastų","lat":55.918648,"lon":23.345073},{"id":46,"n":"Serbentų","lat":55.91545,"lon":23.340761},{"id":47,"n":"Pabalių turgaus","lat":55.909706,"lon":23.333086},{"id":48,"n":"Pabalių","lat":55.906692,"lon":23.329234},{"id":49,"n":"Televizorių","lat":55.910329,"lon":23.315219},{"id":50,"n":"Išradėjų","lat":55.912301,"lon":23.310396},{"id":51,"n":"Liejyklos","lat":55.914906,"lon":23.303998},{"id":52,"n":"Dviračių","lat":55.917091,"lon":23.298645},{"id":53,"n":"Pramonės","lat":55.918785,"lon":23.294601},{"id":54,"n":"Elektros tinklų","lat":55.919094,"lon":23.289608},{"id":55,"n":"Aukštabalio","lat":55.916799,"lon":23.284608},{"id":56,"n":"J. Sondeckio","lat":55.913851,"lon":23.277999},{"id":57,"n":"Lieporių","lat":55.909369,"lon":23.268181},{"id":58,"n":"Tilžės","lat":55.906464,"lon":23.261727},{"id":59,"n":"Dainų žiedo","lat":55.915893,"lon":23.245481},{"id":60,"n":"Gytarių žiedo","lat":55.9046,"lon":23.240922},{"id":61,"n":"Kviečių","lat":55.906905,"lon":23.238525},{"id":62,"n":"Pailių","lat":55.910126,"lon":23.244528},{"id":63,"n":"Vairo","lat":55.921277,"lon":23.294456},{"id":64,"n":"Žaliūkių","lat":55.92412,"lon":23.30063},{"id":65,"n":"Prisikėlimo aikštės","lat":55.932251,"lon":23.316934},{"id":66,"n":"Aukštosios","lat":55.938997,"lon":23.32572},{"id":67,"n":"Smėlio","lat":55.942525,"lon":23.329024},{"id":68,"n":"Purienų","lat":55.949923,"lon":23.336132},{"id":69,"n":"Vaidoto","lat":55.953515,"lon":23.33949},{"id":70,"n":"Pakruojo","lat":55.955798,"lon":23.342897},{"id":71,"n":"Mokyklos","lat":55.954804,"lon":23.349479},{"id":72,"n":"Ginkūnų žiedo","lat":55.953653,"lon":23.357314},{"id":73,"n":"Gegužių žiedo","lat":55.900049,"lon":23.271026},{"id":74,"n":"Lieporių","lat":55.902162,"lon":23.266637},{"id":75,"n":"Degalinės","lat":55.905614,"lon":23.261691},{"id":76,"n":"Bažnyčios","lat":55.912808,"lon":23.252615},{"id":77,"n":"Dainų","lat":55.91384,"lon":23.260471},{"id":78,"n":"Lyros","lat":55.915249,"lon":23.265066},{"id":79,"n":"Teniso kortų","lat":55.919124,"lon":23.263494},{"id":80,"n":"Lauko","lat":55.921045,"lon":23.265404},{"id":81,"n":"Žaliūkių malūno","lat":55.923975,"lon":23.275494},{"id":82,"n":"Dubijos","lat":55.929045,"lon":23.295981},{"id":83,"n":"Jovaro mokyklos","lat":55.933742,"lon":23.30348},{"id":84,"n":"Turgaus","lat":55.936681,"lon":23.307391},{"id":85,"n":"Autobusų stoties","lat":55.927855,"lon":23.308788},{"id":86,"n":"Poliklinikos","lat":55.928372,"lon":23.313938},{"id":87,"n":"Draugystės","lat":55.927594,"lon":23.32052},{"id":88,"n":"Geriatrijos centro","lat":55.926704,"lon":23.322779},{"id":89,"n":"Prūdelio","lat":55.92469,"lon":23.331963},{"id":90,"n":"Šimšės","lat":55.923846,"lon":23.341753},{"id":91,"n":"Vilkaviškio","lat":55.923176,"lon":23.349778},{"id":92,"n":"Veiverių","lat":55.920266,"lon":23.346844},{"id":93,"n":"Agrastų","lat":55.917987,"lon":23.343679},{"id":94,"n":"Serbentų","lat":55.912832,"lon":23.336614},{"id":95,"n":"Pabalių turgaus","lat":55.90947,"lon":23.332306},{"id":96,"n":"Prekybos sandelių","lat":55.906557,"lon":23.325327},{"id":97,"n":"Televizorių","lat":55.911169,"lon":23.313885},{"id":98,"n":"Išradėjų","lat":55.913201,"lon":23.308826},{"id":99,"n":"Liejyklos","lat":55.915667,"lon":23.302753},{"id":100,"n":"Dviračių","lat":55.918039,"lon":23.296804},{"id":101,"n":"Romuvos mokyklos","lat":55.913406,"lon":23.250611},{"id":102,"n":"Dainų žiedo","lat":55.915889,"lon":23.245531}],"dirs":[{"r":"24","name":"Prisikėlimo aikštės st. – Gegužių žiedo st.","to":"Gegužių žiedo","len":8657,"path":[[55.936679,23.307408],[55.936844,23.307458],[55.937503,23.308129],[55.937804,23.308505],[55.937854,23.308737],[55.937808,23.309026],[55.93575,23.312654],[55.935685,23.312688],[55.935642,23.312834],[55.932796,23.317741],[55.93278,23.317772],[55.931793,23.315973],[55.931787,23.315778],[55.931684,23.315754],[55.929726,23.312129],[55.929465,23.311489],[55.929253,23.31099],[55.928392,23.309375],[55.928053,23.308748],[55.928032,23.30851],[55.927877,23.308403],[55.927372,23.307421],[55.927309,23.307194],[55.927365,23.306903],[55.927478,23.306721],[55.927515,23.30659],[55.927198,23.305457],[55.927098,23.305256],[55.926566,23.304728],[55.926516,23.30452],[55.926498,23.30436],[55.927374,23.302454],[55.929387,23.29803],[55.929431,23.297367],[55.929032,23.294569],[55.929092,23.294342],[55.928958,23.294121],[55.928424,23.290458],[55.928102,23.289049],[55.926929,23.284936],[55.924636,23.277143],[55.923932,23.274785],[55.923969,23.274451],[55.923799,23.274234],[55.92105,23.264869],[55.921031,23.264475],[55.920853,23.264135],[55.920317,23.262213],[55.919718,23.262755],[55.919619,23.26271],[55.919577,23.262887],[55.916419,23.265788],[55.916026,23.266163],[55.91586,23.266243],[55.915641,23.26584],[55.915492,23.265381],[55.915417,23.265099],[55.915441,23.264912],[55.915293,23.264734],[55.914965,23.263578],[55.914849,23.263358],[55.91427,23.261282],[55.913764,23.259555],[55.913816,23.259257],[55.913633,23.258941],[55.913527,23.258382],[55.91349,23.258064],[55.913411,23.257155],[55.913316,23.255867],[55.913212,23.254264],[55.913127,23.253493],[55.913021,23.252887],[55.91262,23.251444],[55.91218,23.252027],[55.912003,23.251997],[55.911941,23.252359],[55.910141,23.254924],[55.90862,23.257097],[55.908428,23.257117],[55.90833,23.257562],[55.906189,23.260635],[55.905241,23.26194],[55.905054,23.261906],[55.904975,23.262302],[55.902791,23.265453],[55.901796,23.266861],[55.901639,23.266816],[55.901557,23.267191],[55.900272,23.269051],[55.899766,23.269757],[55.900138,23.270599],[55.899907,23.270959],[55.89979,23.270961],[55.89975,23.270941],[55.89975,23.270895]],"cum":[0,19,103,144,159,178,500,507,518,958,960,1117,1129,1141,1455,1504,1543,1682,1736,1751,1769,1853,1868,1887,1904,1914,1992,2009,2077,2091,2101,2255,2610,2652,2831,2847,2867,3103,3198,3486,4034,4201,4222,4245,4904,4928,4957,5091,5166,5177,5189,5584,5634,5653,5688,5721,5740,5752,5772,5853,5872,6016,6138,6157,6185,6222,6242,6300,6381,6481,6530,6570,6670,6731,6751,6774,7030,7247,7268,7298,7604,7737,7758,7784,8096,8238,8255,8280,8464,8536,8602,8636,8649,8654,8657],"stops":[[0,1],[507,2],[1129,3],[1751,4],[2847,5],[4222,6],[4928,7],[5177,8],[5752,9],[6157,10],[6751,11],[7269,12],[7758,13],[8255,14],[8657,15]]},{"r":"21","name":"Ginkūnų žiedo st. – Gytarių žiedo st.","to":"Gytarių žiedo","len":11077,"path":[[55.953654,23.35734],[55.953796,23.357356],[55.953831,23.356506],[55.953923,23.355577],[55.954366,23.352719],[55.955115,23.347715],[55.955243,23.347432],[55.95524,23.347031],[55.95603,23.341663],[55.955069,23.340746],[55.95501,23.340469],[55.954775,23.340473],[55.952169,23.337988],[55.952057,23.337674],[55.951774,23.337606],[55.944676,23.330817],[55.94184,23.328143],[55.941511,23.327575],[55.941198,23.327531],[55.940346,23.326758],[55.939582,23.326012],[55.937972,23.324487],[55.937923,23.324223],[55.937632,23.324141],[55.936761,23.323279],[55.93581,23.322213],[55.934942,23.32105],[55.933828,23.319373],[55.93278,23.317772],[55.931793,23.315973],[55.931787,23.315778],[55.931684,23.315754],[55.930069,23.312763],[55.929733,23.312142],[55.929444,23.31144],[55.92924,23.310966],[55.928053,23.308748],[55.928032,23.30851],[55.927877,23.308403],[55.927372,23.307421],[55.9268,23.30626],[55.926545,23.305757],[55.923724,23.299518],[55.9237,23.299276],[55.923537,23.299115],[55.921933,23.295574],[55.921912,23.295248],[55.921722,23.295088],[55.919467,23.290114],[55.919503,23.289874],[55.91934,23.289803],[55.916455,23.283462],[55.916422,23.283117],[55.916197,23.282922],[55.913553,23.277072],[55.913531,23.276753],[55.913341,23.276599],[55.911165,23.271798],[55.911206,23.271499],[55.911009,23.271446],[55.908714,23.266338],[55.908716,23.266104],[55.908548,23.265983],[55.908082,23.264883],[55.9077,23.263949],[55.907106,23.262625],[55.907117,23.262377],[55.906906,23.262123],[55.906189,23.260635],[55.906965,23.259522],[55.908163,23.257803],[55.908823,23.256806],[55.909093,23.256421],[55.909272,23.25649],[55.909363,23.256034],[55.911941,23.252359],[55.91262,23.251444],[55.912342,23.250505],[55.912405,23.250303],[55.91227,23.250248],[55.911644,23.248114],[55.911021,23.246086],[55.910764,23.245449],[55.910366,23.244661],[55.909857,23.243719],[55.909869,23.243465],[55.90969,23.243411],[55.908171,23.240574],[55.907678,23.239618],[55.907676,23.239419],[55.907495,23.239298],[55.906857,23.238106],[55.906753,23.237988],[55.906649,23.23794],[55.906531,23.237985],[55.906111,23.238525],[55.905031,23.240071],[55.904607,23.240669],[55.904474,23.240668]],"cum":[0,16,69,128,312,635,658,683,1029,1150,1168,1194,1523,1546,1578,2473,2830,2881,2916,3022,3119,3322,3339,3372,3482,3607,3728,3890,4043,4200,4212,4224,4483,4537,4591,4628,4819,4834,4853,4936,5032,5074,5574,5589,5610,5894,5914,5937,6336,6352,6370,6879,6901,6929,7397,7417,7440,7825,7844,7866,8274,8289,8309,8395,8467,8573,8588,8616,8739,8849,9020,9117,9155,9175,9205,9572,9667,9733,9747,9763,9913,10057,10106,10172,10254,10269,10290,10534,10615,10627,10649,10752,10765,10777,10791,10848,11002,11062,11077],"stops":[[0,16],[658,17],[1168,18],[1546,19],[2881,20],[3339,21],[4213,3],[4834,4],[5589,24],[5914,25],[6352,26],[6901,27],[7417,28],[7844,29],[8289,30],[8588,31],[9175,32],[9591,11],[9747,33],[10269,34],[10627,35],[11077,36]]},{"r":"6","name":"Dainų žiedo st. – Autobusų stoties st.","to":"Autobusų stoties","len":12732,"path":[[55.915893,23.245481],[55.91567,23.245298],[55.915553,23.245064],[55.915333,23.245224],[55.915821,23.246895],[55.914256,23.249082],[55.91262,23.251444],[55.91218,23.252027],[55.912003,23.251997],[55.911941,23.252359],[55.909363,23.256034],[55.90862,23.257097],[55.908428,23.257117],[55.908329,23.257563],[55.906189,23.260635],[55.906091,23.26077],[55.906487,23.261616],[55.906464,23.261727],[55.906555,23.261765],[55.907774,23.264431],[55.907971,23.264866],[55.908099,23.265002],[55.908796,23.266568],[55.909362,23.267834],[55.909369,23.268181],[55.909578,23.26831],[55.911133,23.271795],[55.912932,23.275811],[55.913836,23.277789],[55.913851,23.277999],[55.913969,23.278117],[55.915069,23.280566],[55.916759,23.284253],[55.916799,23.284608],[55.917096,23.284963],[55.919081,23.289305],[55.919094,23.289608],[55.91928,23.289756],[55.920119,23.29163],[55.920162,23.291923],[55.92017,23.292111],[55.920072,23.292477],[55.91991,23.292824],[55.918862,23.294648],[55.918785,23.294601],[55.918784,23.294773],[55.918124,23.296307],[55.91725,23.298482],[55.917091,23.298645],[55.917034,23.299017],[55.915437,23.30295],[55.915074,23.303884],[55.914906,23.303998],[55.914884,23.304358],[55.912596,23.310002],[55.912301,23.310396],[55.912227,23.310897],[55.910466,23.31514],[55.910329,23.315219],[55.910337,23.315516],[55.908676,23.319734],[55.906653,23.324706],[55.905488,23.327515],[55.906633,23.328924],[55.906692,23.329234],[55.906905,23.329257],[55.909698,23.332858],[55.909706,23.333086],[55.909886,23.333099],[55.914207,23.338742],[55.915342,23.340463],[55.91545,23.340761],[55.915709,23.340933],[55.916222,23.341641],[55.91669,23.342155],[55.917692,23.343518],[55.918403,23.34452],[55.918583,23.344746],[55.918648,23.345073],[55.918806,23.345063],[55.920155,23.346943],[55.920596,23.347539],[55.920839,23.347893],[55.920801,23.348057],[55.920988,23.348095],[55.922898,23.350733],[55.92308,23.35095],[55.923159,23.350965],[55.923203,23.350477],[55.92341,23.347919],[55.923539,23.347621],[55.923456,23.347337],[55.923837,23.342792],[55.923892,23.34213],[55.923994,23.342007],[55.923939,23.341682],[55.924155,23.339133],[55.924404,23.336249],[55.924633,23.333472],[55.924863,23.33113],[55.924983,23.330911],[55.924945,23.330369],[55.925189,23.328172],[55.925364,23.326657],[55.925533,23.325687],[55.925815,23.324702],[55.92616,23.323908],[55.927072,23.322328],[55.927205,23.322346],[55.927241,23.32206],[55.927824,23.321073],[55.927885,23.320921],[55.927899,23.320746],[55.927855,23.3206],[55.927781,23.320471],[55.92738,23.319814],[55.927376,23.319637],[55.927235,23.31958],[55.926065,23.317664],[55.924009,23.315011],[55.923881,23.314765],[55.923886,23.314614],[55.924011,23.314344],[55.924109,23.314122],[55.924193,23.314042],[55.924205,23.313881],[55.925592,23.310703],[55.926215,23.309045],[55.92654,23.308309],[55.926862,23.307715],[55.927141,23.307364],[55.927234,23.30735],[55.927664,23.30825],[55.927792,23.308503],[55.92784,23.308782]],"cum":[0,27,47,73,191,412,646,707,727,750,1117,1223,1244,1274,1580,1593,1662,1669,1680,1894,1929,1946,2070,2171,2193,2217,2495,2815,2974,2987,3003,3198,3495,3517,3557,3906,3925,3948,4097,4116,4128,4153,4181,4344,4353,4364,4484,4651,4672,4696,4998,5069,5089,5112,5546,5587,5619,5948,5964,5982,6304,6687,6904,7059,7079,7103,7486,7501,7521,8116,8282,8304,8334,8407,8468,8608,8708,8733,8755,8772,8962,9024,9059,9070,9091,9360,9384,9393,9423,9585,9608,9628,9914,9956,9970,9991,10152,10333,10508,10656,10675,10710,10849,10945,11009,11078,11140,11282,11296,11315,11404,11416,11427,11437,11449,11509,11520,11536,11713,11995,12016,12025,12047,12065,12075,12085,12336,12461,12519,12571,12609,12619,12693,12714,12732],"stops":[[0,59],[545,101],[726,11],[1244,12],[1669,58],[2193,57],[2987,56],[3517,55],[3925,54],[4353,53],[4672,52],[5089,51],[5587,50],[5964,49],[6724,96],[7079,48],[7501,47],[8304,46],[8755,45],[9070,44],[9608,43],[9970,42],[10675,41],[11296,40],[11520,39],[12075,38],[12732,37]]},{"r":"6","name":"Autobusų stoties st. – Dainų žiedo st.","to":"Dainų žiedo","len":12346,"path":[[55.927855,23.308788],[55.927956,23.308787],[55.92843,23.309687],[55.929403,23.311532],[55.928713,23.31322],[55.928448,23.313917],[55.928372,23.313938],[55.92836,23.314151],[55.926584,23.31867],[55.927587,23.320344],[55.927594,23.32052],[55.927724,23.320572],[55.927843,23.32077],[55.927831,23.320973],[55.927503,23.321561],[55.926827,23.322715],[55.926704,23.322779],[55.92668,23.322965],[55.926209,23.323768],[55.926125,23.323941],[55.925697,23.325029],[55.925589,23.325392],[55.925502,23.32577],[55.925297,23.327367],[55.924848,23.331287],[55.924784,23.331783],[55.92469,23.331963],[55.92474,23.33223],[55.924397,23.336319],[55.923937,23.341576],[55.923846,23.341753],[55.923861,23.342183],[55.923291,23.349496],[55.923176,23.349778],[55.923197,23.350358],[55.923147,23.350925],[55.923064,23.350925],[55.92278,23.350527],[55.920589,23.347493],[55.920231,23.347042],[55.920266,23.346844],[55.920096,23.346811],[55.917939,23.343856],[55.917987,23.343679],[55.917794,23.343657],[55.914423,23.338924],[55.913447,23.337694],[55.912875,23.33692],[55.912832,23.336614],[55.912592,23.336519],[55.909476,23.332529],[55.90947,23.332306],[55.909277,23.332285],[55.906487,23.328713],[55.905794,23.32784],[55.905725,23.32703],[55.906407,23.325295],[55.906557,23.325327],[55.906545,23.324998],[55.909949,23.31657],[55.911047,23.313812],[55.911169,23.313885],[55.911112,23.313648],[55.912529,23.310142],[55.913076,23.30883],[55.913201,23.308826],[55.913222,23.30848],[55.915561,23.302688],[55.915667,23.302753],[55.915636,23.302539],[55.917036,23.299021],[55.917837,23.29691],[55.918033,23.296808],[55.91809,23.296425],[55.91865,23.295024],[55.9201,23.29255],[55.920355,23.292115],[55.919968,23.29122],[55.919484,23.290174],[55.919503,23.289874],[55.919307,23.289752],[55.918788,23.28863],[55.916878,23.284375],[55.91639,23.283322],[55.916422,23.283117],[55.916217,23.282947],[55.913547,23.277074],[55.913531,23.276753],[55.913297,23.276524],[55.911145,23.271734],[55.911206,23.271499],[55.911022,23.27146],[55.909561,23.268205],[55.908712,23.266316],[55.908716,23.266104],[55.908553,23.266004],[55.907141,23.26274],[55.907117,23.262377],[55.90685,23.262067],[55.906202,23.260643],[55.907582,23.258516],[55.909061,23.256453],[55.909272,23.25649],[55.909384,23.256002],[55.912606,23.251432],[55.913291,23.250477],[55.913406,23.250611],[55.913428,23.250242],[55.915776,23.24691],[55.915811,23.246861],[55.915636,23.246272],[55.915889,23.245531]],"cum":[0,11,88,246,376,429,437,451,795,947,958,973,991,1004,1056,1160,1174,1186,1258,1273,1355,1381,1406,1509,1758,1790,1805,1822,2080,2412,2426,2453,2913,2935,2971,3007,3016,3057,3365,3414,3427,3446,3748,3760,3782,4259,4392,4471,4491,4518,4945,4959,4980,5362,5456,5507,5640,5656,5677,6324,6535,6549,6565,6835,6936,6950,6972,7417,7429,7443,7712,7871,7894,7918,8026,8249,8288,8358,8443,8462,8485,8575,8915,9000,9013,9039,9510,9530,9560,9942,9958,9979,10239,10390,10403,10422,10679,10702,10737,10851,11054,11263,11286,11319,11777,11873,11889,11912,12245,12250,12292,12346],"stops":[[0,85],[437,86],[958,87],[1174,88],[1805,89],[2427,90],[2935,91],[3427,92],[3760,93],[4491,94],[4959,95],[5325,48],[5656,96],[6549,97],[6950,98],[7429,99],[7894,100],[8055,53],[8462,26],[9013,27],[9530,28],[9958,29],[10403,30],[10702,31],[11286,32],[11702,11],[11889,101],[12346,102]]},{"r":"21","name":"Gytarių žiedo st. – Ginkūnų žiedo st.","to":"Ginkūnų žiedo","len":11072,"path":[[55.9046,23.240922],[55.904635,23.240636],[55.906524,23.237978],[55.906686,23.23796],[55.906819,23.238045],[55.906918,23.238222],[55.906905,23.238525],[55.907103,23.238595],[55.908523,23.241219],[55.910102,23.24418],[55.910126,23.244528],[55.910342,23.244605],[55.910757,23.245456],[55.911019,23.246089],[55.911897,23.249024],[55.912617,23.25143],[55.912183,23.252041],[55.912003,23.251997],[55.911946,23.252374],[55.909979,23.255143],[55.908606,23.257137],[55.908428,23.257117],[55.90832,23.257553],[55.906095,23.260784],[55.906482,23.261628],[55.906464,23.261727],[55.906573,23.261788],[55.909397,23.267866],[55.909369,23.268181],[55.909578,23.2683],[55.913371,23.276662],[55.913852,23.277723],[55.913851,23.277999],[55.914047,23.278187],[55.916811,23.284284],[55.917057,23.284813],[55.919139,23.289418],[55.919094,23.289608],[55.919271,23.289709],[55.921311,23.294207],[55.921277,23.294456],[55.921452,23.294532],[55.9228,23.297514],[55.923439,23.298928],[55.924104,23.3004],[55.92412,23.30063],[55.924226,23.300668],[55.926222,23.305086],[55.927743,23.308396],[55.92784,23.308782],[55.92804,23.308947],[55.928862,23.310508],[55.929876,23.312411],[55.931189,23.314926],[55.932223,23.316772],[55.932251,23.316934],[55.932403,23.317094],[55.933022,23.318199],[55.933893,23.319526],[55.935323,23.321586],[55.935984,23.322444],[55.93739,23.323915],[55.938885,23.325356],[55.938997,23.32572],[55.939197,23.325655],[55.941118,23.327506],[55.942507,23.328793],[55.942525,23.329024],[55.942731,23.329],[55.945508,23.33162],[55.949867,23.335818],[55.949923,23.336132],[55.950125,23.336067],[55.953439,23.339194],[55.953515,23.33949],[55.953674,23.339416],[55.955852,23.341514],[55.95595,23.34175],[55.955967,23.342008],[55.955952,23.342375],[55.955891,23.342786],[55.955798,23.342897],[55.955817,23.34315],[55.954843,23.349478],[55.954804,23.349479],[55.954803,23.349703],[55.953924,23.355417],[55.95383,23.356336],[55.953746,23.356609],[55.95369,23.356834],[55.953676,23.357184],[55.953653,23.357314]],"cum":[0,18,286,304,319,335,354,376,604,858,880,905,975,1024,1231,1401,1463,1483,1507,1786,1983,2003,2032,2351,2419,2426,2438,2930,2950,2974,3645,3730,3747,3772,4260,4303,4672,4685,4705,5066,5082,5102,5341,5454,5572,5586,5598,5952,6219,6245,6269,6403,6566,6781,6943,6954,6974,7071,7198,7403,7493,7675,7864,7890,7912,8155,8329,8343,8366,8716,9266,9287,9310,9727,9747,9765,10040,10059,10075,10098,10124,10137,10153,10562,10566,10580,10949,11007,11027,11042,11064,11072],"stops":[[0,60],[354,61],[880,62],[1328,33],[1483,11],[2003,12],[2426,58],[2950,57],[3747,56],[4177,27],[4685,54],[5082,63],[5586,64],[6245,37],[6954,65],[7890,66],[8343,67],[9287,68],[9747,69],[10137,70],[10566,71],[11072,72]]},{"r":"24","name":"Gegužių žiedo st. – Prisikėlimo aikštės st.","to":"Prisikėlimo aikštės","len":7081,"path":[[55.900049,23.271026],[55.900205,23.270725],[55.899785,23.269779],[55.902045,23.266536],[55.902162,23.266637],[55.90216,23.266372],[55.905549,23.26155],[55.905614,23.261691],[55.905627,23.261438],[55.909083,23.256436],[55.909272,23.25649],[55.909347,23.256081],[55.912615,23.25143],[55.91293,23.25254],[55.912808,23.252615],[55.913007,23.252808],[55.913213,23.254329],[55.913378,23.256748],[55.913574,23.258707],[55.913844,23.25993],[55.91384,23.260471],[55.914043,23.2606],[55.914869,23.263506],[55.914929,23.263778],[55.915265,23.264899],[55.915249,23.265066],[55.91536,23.265163],[55.915673,23.266209],[55.915614,23.266383],[55.915615,23.266627],[55.915714,23.266753],[55.91585,23.266724],[55.91592,23.26652],[55.915947,23.266372],[55.915995,23.266279],[55.916161,23.266088],[55.918908,23.263505],[55.919026,23.263411],[55.919124,23.263494],[55.919178,23.263289],[55.919983,23.262561],[55.92012,23.262564],[55.920202,23.262616],[55.920364,23.262849],[55.921078,23.265271],[55.921045,23.265404],[55.921134,23.265461],[55.922473,23.270005],[55.923966,23.275193],[55.923975,23.275494],[55.92413,23.275716],[55.926747,23.284852],[55.928266,23.289927],[55.929052,23.295443],[55.929083,23.295754],[55.929045,23.295981],[55.929136,23.296178],[55.9293,23.297336],[55.929436,23.297814],[55.929635,23.298163],[55.92989,23.298379],[55.931158,23.299996],[55.93228,23.301426],[55.933694,23.30323],[55.933742,23.30348],[55.933899,23.303525],[55.936303,23.30673],[55.936387,23.306921],[55.936537,23.307112],[55.936675,23.307287],[55.936681,23.307391]],"cum":[0,26,101,423,438,454,936,948,963,1458,1479,1506,1971,2049,2063,2088,2186,2338,2462,2544,2577,2601,2804,2822,2902,2912,2926,3000,3013,3028,3041,3056,3071,3081,3089,3111,3456,3470,3483,3497,3597,3612,3622,3645,3816,3825,3835,4155,4518,4537,4559,5199,5557,5912,5931,5946,5962,6037,6070,6101,6132,6306,6459,6652,6669,6686,7020,7035,7056,7074,7081],"stops":[[0,73],[438,74],[948,75],[1479,32],[2063,76],[2577,77],[2912,78],[3483,79],[3825,80],[4537,81],[5946,82],[6669,83],[7081,84]]}]};
+const COL = {'21':'#D8CF5E','24':'#E2765A','6':'#2BA88F'};
+const WALK = 80, BUS = 330, WAIT = 4, XFER = 3, DETOUR = 1.25, MAXWALK = 1200;
+const stopById = {}; DATA.stops.forEach(s => stopById[s.id] = s);
+
+function dist(a, b){
+  const R=6371000, toR=Math.PI/180;
+  const x=(b.lon-a.lon)*toR*Math.cos((a.lat+b.lat)/2*toR), y=(b.lat-a.lat)*toR;
+  return Math.sqrt(x*x+y*y)*R;
+}
+function walkMin(m){ return m*DETOUR/WALK; }
+
+// --- planner: returns up to 3 options sorted by time
+function plan(A, B){
+  const opts = [];
+  const direct = dist(A,B);
+  if (direct < 1500) opts.push({kind:'walk', t: walkMin(direct), legs:[{type:'walk', from:A, to:B, m:direct}]});
+  const D = DATA.dirs.map((d,di) => d.stops.map(([pos,id]) => ({di, pos, s:stopById[id], wa:dist(A,stopById[id]), wb:dist(stopById[id],B)})));
+  // direct bus
+  D.forEach((seq, di) => {
+    for (let i=0;i<seq.length;i++){ if (seq[i].wa>MAXWALK) continue;
+      for (let j=i+1;j<seq.length;j++){ if (seq[j].wb>MAXWALK) continue;
+        const ride=(seq[j].pos-seq[i].pos)/BUS;
+        const t=walkMin(seq[i].wa)+WAIT+ride+walkMin(seq[j].wb);
+        opts.push({kind:'bus', t, key:DATA.dirs[di].r, legs:[
+          {type:'walk', from:A, to:seq[i].s, m:seq[i].wa},
+          {type:'bus', di, a:seq[i], b:seq[j], n:j-i},
+          {type:'walk', from:seq[j].s, to:B, m:seq[j].wb}]});
+      }}
+  });
+  // one transfer
+  D.forEach((s1, d1) => D.forEach((s2, d2) => {
+    if (DATA.dirs[d1].r === DATA.dirs[d2].r) return;
+    for (let i=0;i<s1.length;i++){ if (s1[i].wa>MAXWALK) continue;
+      for (let k=i+1;k<s1.length;k++){
+        for (let m=0;m<s2.length;m++){
+          const xw = dist(s1[k].s, s2[m].s); if (xw>250) continue;
+          for (let j=m+1;j<s2.length;j++){ if (s2[j].wb>MAXWALK) continue;
+            const t=walkMin(s1[i].wa)+WAIT+(s1[k].pos-s1[i].pos)/BUS+walkMin(xw)+XFER+WAIT+(s2[j].pos-s2[m].pos)/BUS+walkMin(s2[j].wb);
+            opts.push({kind:'xfer', t, key:DATA.dirs[d1].r+'>'+DATA.dirs[d2].r, legs:[
+              {type:'walk', from:A, to:s1[i].s, m:s1[i].wa},
+              {type:'bus', di:d1, a:s1[i], b:s1[k], n:k-i},
+              {type:'walk', from:s1[k].s, to:s2[m].s, m:xw, xfer:true},
+              {type:'bus', di:d2, a:s2[m], b:s2[j], n:j-m},
+              {type:'walk', from:s2[j].s, to:B, m:s2[j].wb}]});
+          }}}}
+  }));
+  // ranking score: long walks and transfers feel worse than the raw minutes say
+  opts.forEach(o => { o.score = o.t + (o.kind==='xfer'?4:0) + o.legs.filter(l=>l.type==='walk').reduce((a,l)=>a+0.6*walkMin(Math.max(0,l.m-300)),0); });
+  opts.sort((a,b) => a.score-b.score);
+  const seen = new Set(), res = [];
+  const best = opts.length ? opts[0].score : 0;
+  for (const o of opts){
+    if (o.score > best*1.35 + 3) break;
+    if (o.legs.some(l => l.type==='bus' && l.n<1)) continue;
+    const k = o.kind==='walk' ? 'walk' : o.key;
+    if (seen.has(k)) continue;
+    // drop bus options that are not meaningfully faster than walking
+    if (o.kind!=='walk' && direct<1500 && o.t > walkMin(direct)) continue;
+    seen.add(k); res.push(o); if (res.length===3) break;
+  }
+  return res;
+}
+if (typeof module !== 'undefined') { module.exports = {plan, DATA, stopById}; }
+</script>
+<script>
+if (typeof L !== 'undefined') (function(){
+const $ = id => document.getElementById(id);
+const map = L.map('map', {zoomControl:true, attributionControl:true}).setView([55.928, 23.30], 13);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:19, subdomains:'abcd', attribution:'&copy; OpenStreetMap &copy; CARTO'}).addTo(map);
+const base = L.layerGroup().addTo(map), route = L.layerGroup().addTo(map);
+DATA.dirs.forEach(d => L.polyline(d.path, {color:COL[d.r], weight:3, opacity:.35, interactive:false}).addTo(base));
+const names = [...new Set(DATA.stops.map(s => s.n))].sort((a,b)=>a.localeCompare(b,'lt'));
+$('stoplist').innerHTML = names.map(n => '<option value="'+n+' (stotelė)">').join('');
+
+let A=null, B=null, mA=null, mB=null, opts=[], sel=0;
+const pinIcon = (t, c) => L.divIcon({className:'', html:'<div style="width:28px;height:28px;border-radius:50%;background:'+c+';color:#0F1318;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;border:2px solid #0F1318">'+t+'</div>', iconSize:[28,28], iconAnchor:[14,14]});
+function setPt(which, p, label){
+  if (which==='A'){ A=p; if(mA) map.removeLayer(mA); mA=L.marker([p.lat,p.lon],{icon:pinIcon('A','#EEF1F4')}).addTo(map); if(label!=null) $('from').value=label; }
+  else { B=p; if(mB) map.removeLayer(mB); mB=L.marker([p.lat,p.lon],{icon:pinIcon('B','#F2B33D')}).addTo(map); if(label!=null) $('to').value=label; }
+}
+map.on('click', e => {
+  const p={lat:e.latlng.lat, lon:e.latlng.lng}, lbl='Pažymėta vieta';
+  if (!A || (A && B)) { if (A&&B){ B=null; if(mB){map.removeLayer(mB);mB=null;} $('to').value=''; route.clearLayers(); $('out').innerHTML=''; } setPt('A',p,lbl); }
+  else { setPt('B',p,lbl); run(); }
+});
+
+async function resolve(text){
+  const t = text.trim(); if (!t) return null;
+  if (t==='Pažymėta vieta' || t==='Mano vieta') return 'keep';
+  const sn = t.replace(/\s*\(stotelė\)$/,'').replace(/\s+st\.?$/,'').toLowerCase();
+  const st = DATA.stops.filter(s => s.n.toLowerCase()===sn);
+  if (st.length){ const lat=st.reduce((a,s)=>a+s.lat,0)/st.length, lon=st.reduce((a,s)=>a+s.lon,0)/st.length; return {lat,lon}; }
+  const url='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=lt&viewbox=23.18,55.97,23.42,55.87&bounded=1&q='+encodeURIComponent(t+', Šiauliai');
+  try{ const r=await fetch(url,{headers:{'Accept-Language':'lt'}}); const j=await r.json(); if(j.length) return {lat:+j[0].lat, lon:+j[0].lon}; }catch(e){}
+  return null;
+}
+async function run(){
+  $('go').disabled=true;
+  try{
+    const ra = await resolve($('from').value), rb = await resolve($('to').value);
+    if (ra && ra!=='keep') setPt('A', ra);
+    if (rb && rb!=='keep') setPt('B', rb);
+    if (!A || !B || !ra || !rb){ $('out').innerHTML='<div class="msg">'+(!ra||!A?'Nerastas taškas A.':'Nerastas taškas B.')+' Patikslink adresą arba pažymėk vietą žemėlapyje.</div>'; return; }
+    opts = plan(A,B); sel=0; render();
+  } finally { $('go').disabled=false; }
+}
+const fmt = m => m<60 ? Math.max(1,Math.round(m))+' min' : Math.floor(m/60)+' val. '+Math.round(m%60)+' min';
+const fm = m => m<950 ? Math.round(m/10)*10+' m' : (m/1000).toFixed(1).replace('.',',')+' km';
+const walkSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13" cy="4" r="2"/><path d="M10 22l2-7 3 3v6M7 13l3-5 4 1 3 4M10 8l-2 5"/></svg>';
+function badge(r){ return '<span class="badge" style="background:'+COL[r]+'">'+r+'</span>'; }
+function render(){
+  const out=$('out');
+  if (!opts.length){ out.innerHTML='<div class="msg">Tinkamo maršruto nerasta: taškai per toli nuo stotelių (daugiau nei 1,2 km).</div>'; route.clearLayers(); return; }
+  out.innerHTML = opts.map((o,idx) => {
+    const buses=o.legs.filter(l=>l.type==='bus');
+    const top = o.kind==='walk' ? '<span class="walkic">'+walkSvg+'</span><span style="font-weight:700">Pėsčiomis</span>' :
+      buses.map(l=>badge(DATA.dirs[l.di].r)).join('<span class="arrow" aria-hidden="true">›</span>') + '<span class="arrow">'+(buses.length>1?'1 persėdimas':'be persėdimų')+'</span>';
+    const steps = o.legs.map(l => {
+      if (l.type==='walk'){ if (l.m<40) return ''; const to = l.to===B?'tikslo':(l.xfer?'stotelės '+l.to.n+' (persėdimas)':'stotelės '+l.to.n);
+        return '<li><span class="bar walk"></span><span class="st"><b>Eik iki '+to+'</b><span>'+fm(l.m)+' · ~'+fmt(walkMin(l.m))+'</span></span></li>'; }
+      const d=DATA.dirs[l.di];
+      return '<li><span class="bar" style="background:'+COL[d.r]+'"></span><span class="st"><b>'+d.r+' iki stotelės '+l.b.s.n+'</b><span>įlipk: '+l.a.s.n+' · kryptimi '+d.to+' · '+l.n+' stot.</span></span></li>';
+    }).join('');
+    return '<button type="button" class="opt'+(idx===sel?' sel':'')+'" data-i="'+idx+'" aria-expanded="'+(idx===sel)+'"><span class="top">'+top+'<span class="time">~'+fmt(o.t)+'</span></span><ol class="steps">'+steps+'</ol></button>';
+  }).join('');
+  out.querySelectorAll('.opt').forEach(b => b.onclick = () => { sel=+b.dataset.i; render(); });
+  draw(opts[sel]);
+}
+function slice(d, p0, p1){
+  const pts=[]; const P=d.path, C=d.cum;
+  const at=(p)=>{ for(let i=1;i<C.length;i++){ if(C[i]>=p){ const t=(p-C[i-1])/((C[i]-C[i-1])||1); return [P[i-1][0]+t*(P[i][0]-P[i-1][0]), P[i-1][1]+t*(P[i][1]-P[i-1][1])]; } } return P[P.length-1]; };
+  pts.push(at(p0)); for(let i=0;i<C.length;i++) if(C[i]>p0 && C[i]<p1) pts.push(P[i]); pts.push(at(p1)); return pts;
+}
+function draw(o){
+  route.clearLayers(); const bounds=[];
+  o.legs.forEach(l => {
+    if (l.type==='walk'){ const ll=[[l.from.lat,l.from.lon],[l.to.lat,l.to.lon]]; L.polyline(ll,{color:'#EEF1F4',weight:3,dashArray:'4 8',opacity:.9}).addTo(route); bounds.push(...ll); return; }
+    const d=DATA.dirs[l.di], pts=slice(d,l.a.pos,l.b.pos);
+    L.polyline(pts,{color:'#0F1318',weight:11,opacity:.9}).addTo(route);
+    L.polyline(pts,{color:COL[d.r],weight:7}).addTo(route); bounds.push(...pts);
+    [l.a,l.b].forEach(x => L.circleMarker([x.s.lat,x.s.lon],{radius:6,color:COL[d.r],weight:3,fillColor:'#0F1318',fillOpacity:1}).bindTooltip(x.s.n,{permanent:true,direction:'top',className:'lbl',offset:[0,-6]}).addTo(route));
+  });
+  if (bounds.length) map.fitBounds(bounds,{padding:[40,40]});
+}
+$('go').onclick = run;
+['from','to'].forEach(id => $(id).addEventListener('keydown', e => { if(e.key==='Enter') run(); }));
+$('swap').onclick = () => { const v=$('from').value; $('from').value=$('to').value; $('to').value=v; const a=A; A=B; B=a;
+  if(mA) map.removeLayer(mA); if(mB) map.removeLayer(mB); mA=mB=null; if(A) setPt('A',A); if(B) setPt('B',B); if(A&&B){ opts=plan(A,B); sel=0; render(); } };
+$('loc').onclick = () => { if(!navigator.geolocation) return; navigator.geolocation.getCurrentPosition(p => { setPt('A',{lat:p.coords.latitude,lon:p.coords.longitude},'Mano vieta'); map.setView([p.coords.latitude,p.coords.longitude],15); }, () => { $('out').innerHTML='<div class="msg">Nepavyko nustatyti tavo vietos. Įvesk adresą ranka.</div>'; }); };
+})();
+</script>
+</body>
+</html>
